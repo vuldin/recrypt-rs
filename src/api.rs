@@ -263,6 +263,52 @@ pub enum EncryptedValue {
 }
 
 impl EncryptedValue {
+    /// Public constructor for EncryptedOnceValue variant
+    /// Enables deserialization from stored bytes
+    pub fn new_encrypted_once(
+        ephemeral_public_key: PublicKey,
+        encrypted_message: EncryptedMessage,
+        auth_hash: AuthHash,
+        public_signing_key: PublicSigningKey,
+        signature: Ed25519Signature,
+    ) -> EncryptedValue {
+        EncryptedValue::EncryptedOnceValue {
+            ephemeral_public_key,
+            encrypted_message,
+            auth_hash,
+            public_signing_key,
+            signature,
+        }
+    }
+
+    /// Public constructor for TransformedValue variant
+    /// Enables deserialization from stored bytes
+    pub fn new_transformed(
+        ephemeral_public_key: PublicKey,
+        encrypted_message: EncryptedMessage,
+        auth_hash: AuthHash,
+        transform_blocks: NonEmptyVec<TransformBlock>,
+        public_signing_key: PublicSigningKey,
+        signature: Ed25519Signature,
+    ) -> EncryptedValue {
+        EncryptedValue::TransformedValue {
+            ephemeral_public_key,
+            encrypted_message,
+            auth_hash,
+            transform_blocks,
+            public_signing_key,
+            signature,
+        }
+    }
+
+    /// Get the variant type as a discriminant byte
+    pub fn variant_discriminant(&self) -> u8 {
+        match self {
+            EncryptedValue::EncryptedOnceValue { .. } => 0,
+            EncryptedValue::TransformedValue { .. } => 1,
+        }
+    }
+
     fn try_from(
         signed_value: internal::SignedValue<internal::EncryptedValue<Monty256>>,
     ) -> Result<EncryptedValue> {
