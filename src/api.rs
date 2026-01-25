@@ -309,6 +309,35 @@ impl EncryptedValue {
         }
     }
 
+    /// Get field values for serialization - EncryptedOnce variant
+    pub fn as_encrypted_once(&self) -> Option<(&PublicKey, &EncryptedMessage, &AuthHash, &PublicSigningKey, &Ed25519Signature)> {
+        match self {
+            EncryptedValue::EncryptedOnceValue {
+                ephemeral_public_key,
+                encrypted_message,
+                auth_hash,
+                public_signing_key,
+                signature,
+            } => Some((ephemeral_public_key, encrypted_message, auth_hash, public_signing_key, signature)),
+            _ => None,
+        }
+    }
+
+    /// Get field values for serialization - Transformed variant
+    pub fn as_transformed(&self) -> Option<(&PublicKey, &EncryptedMessage, &AuthHash, &NonEmptyVec<TransformBlock>, &PublicSigningKey, &Ed25519Signature)> {
+        match self {
+            EncryptedValue::TransformedValue {
+                ephemeral_public_key,
+                encrypted_message,
+                auth_hash,
+                transform_blocks,
+                public_signing_key,
+                signature,
+            } => Some((ephemeral_public_key, encrypted_message, auth_hash, transform_blocks, public_signing_key, signature)),
+            _ => None,
+        }
+    }
+
     fn try_from(
         signed_value: internal::SignedValue<internal::EncryptedValue<Monty256>>,
     ) -> Result<EncryptedValue> {
