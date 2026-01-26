@@ -338,6 +338,137 @@ impl EncryptedValue {
         }
     }
 
+    /// Serialize to bytes using a simple custom format
+    /// Format: [1 byte discriminant] [64 bytes ephemeral_public_key] [variable length other fields]
+    pub fn to_bytes_custom(&self) -> ByteVector {
+        let mut bytes = Vec::new();
+
+        // Write variant discriminant
+        bytes.push(self.variant_discriminant());
+
+        match self.variant_discriminant() {
+            0 => {
+                // EncryptedOnce variant
+                if let Some((ephemeral_public_key, encrypted_message, auth_hash, public_signing_key, signature)) =
+                    self.as_encrypted_once() {
+
+                    // Serialize PublicKey (64 bytes)
+                    let (x, y) = ephemeral_public_key.bytes_x_y();
+                    bytes.extend_from_slice(x);
+                    bytes.extend_from_slice(y);
+
+                    // Serialize EncryptedMessage
+                    bytes.extend_from_slice(&encrypted_message.to_bytes());
+
+                    // Serialize AuthHash
+                    bytes.extend_from_slice(&auth_hash.to_bytes());
+
+                    // Serialize PublicSigningKey
+                    bytes.extend_from_slice(&public_signing_key.to_bytes());
+
+                    // Serialize Ed25519Signature
+                    bytes.extend_from_slice(&signature.to_bytes());
+                }
+            }
+            1 => {
+                // Transformed variant - not implemented yet
+                // Would need to serialize transform_blocks which is complex
+            }
+            _ => {}
+        }
+
+        bytes
+    }
+
+    /// Deserialize from bytes produced by to_bytes_custom()
+    pub fn from_bytes_custom(bytes: &[u8]) -> Result<EncryptedValue> {
+        if bytes.is_empty() {
+            return Err(internal::InternalError::UnexpectedError(
+                "Empty bytes for EncryptedValue deserialization".to_string()
+            ).into());
+        }
+
+        let mut offset = 0;
+        let discriminant = bytes[offset];
+        offset += 1;
+
+        match discriminant {
+            0 => {
+                // EncryptedOnce variant
+                // Deserialize PublicKey (64 bytes)
+                if bytes.len() < offset + 64 {
+                    return Err(internal::InternalError::UnexpectedError(
+                        "Insufficient bytes for PublicKey".to_string()
+                    ).into());
+                }
+                let x = &bytes[offset..offset + 32];
+                let y = &bytes[offset + 32..offset + 64];
+                let ephemeral_public_key = PublicKey::new_from_slice((x, y))?;
+                offset += 64;
+
+                // Deserialize EncryptedMessage (384 bytes for Fp12Elem)
+                if bytes.len() < offset + 384 {
+                    return Err(internal::InternalError::UnexpectedError(
+                        "Insufficient bytes for EncryptedMessage".to_string()
+                    ).into());
+                }
+                let mut msg_bytes = [0u8; 384];
+                msg_bytes.copy_from_slice(&bytes[offset..offset + 384]);
+                let encrypted_message = EncryptedMessage::new(msg_bytes);
+                offset += 384;
+
+                // Deserialize AuthHash (32 bytes)
+                if bytes.len() < offset + 32 {
+                    return Err(internal::InternalError::UnexpectedError(
+                        "Insufficient bytes for AuthHash".to_string()
+                    ).into());
+                }
+                let mut auth_bytes = [0u8; 32];
+                auth_bytes.copy_from_slice(&bytes[offset..offset + 32]);
+                let auth_hash = AuthHash::new(auth_bytes);
+                offset += 32;
+
+                // Deserialize PublicSigningKey (32 bytes)
+                if bytes.len() < offset + 32 {
+                    return Err(internal::InternalError::UnexpectedError(
+                        "Insufficient bytes for PublicSigningKey".to_string()
+                    ).into());
+                }
+                let mut pub_signing_bytes = [0u8; 32];
+                pub_signing_bytes.copy_from_slice(&bytes[offset..offset + 32]);
+                let public_signing_key = PublicSigningKey::new(pub_signing_bytes);
+                offset += 32;
+
+                // Deserialize Ed25519Signature (64 bytes)
+                if bytes.len() < offset + 64 {
+                    return Err(internal::InternalError::UnexpectedError(
+                        "Insufficient bytes for Ed25519Signature".to_string()
+                    ).into());
+                }
+                let mut sig_bytes = [0u8; 64];
+                sig_bytes.copy_from_slice(&bytes[offset..offset + 64]);
+                let signature = Ed25519Signature::new(sig_bytes);
+
+                Ok(EncryptedValue::new_encrypted_once(
+                    ephemeral_public_key,
+                    encrypted_message,
+                    auth_hash,
+                    public_signing_key,
+                    signature,
+                ))
+            }
+            1 => {
+                // Transformed variant not implemented yet
+                Err(internal::InternalError::UnexpectedError(
+                    "TransformedValue deserialization not yet implemented".to_string()
+                ).into())
+            }
+            _ => Err(internal::InternalError::UnexpectedError(
+                "Invalid EncryptedValue discriminant".to_string()
+            ).into())
+        }
+    }
+
     fn try_from(
         signed_value: internal::SignedValue<internal::EncryptedValue<Monty256>>,
     ) -> Result<EncryptedValue> {
