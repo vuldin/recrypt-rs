@@ -357,17 +357,17 @@ impl EncryptedValue {
                     bytes.extend_from_slice(x);
                     bytes.extend_from_slice(y);
 
-                    // Serialize EncryptedMessage
-                    bytes.extend_from_slice(&encrypted_message.to_bytes());
+                    // Serialize EncryptedMessage (384 bytes)
+                    bytes.extend_from_slice(encrypted_message.bytes());
 
-                    // Serialize AuthHash
-                    bytes.extend_from_slice(&auth_hash.to_bytes());
+                    // Serialize AuthHash (32 bytes)
+                    bytes.extend_from_slice(auth_hash.bytes());
 
-                    // Serialize PublicSigningKey
-                    bytes.extend_from_slice(&public_signing_key.to_bytes());
+                    // Serialize PublicSigningKey (32 bytes)
+                    bytes.extend_from_slice(public_signing_key.bytes());
 
-                    // Serialize Ed25519Signature
-                    bytes.extend_from_slice(&signature.to_bytes());
+                    // Serialize Ed25519Signature (64 bytes)
+                    bytes.extend_from_slice(signature.bytes());
                 }
             }
             1 => {
@@ -383,9 +383,7 @@ impl EncryptedValue {
     /// Deserialize from bytes produced by to_bytes_custom()
     pub fn from_bytes_custom(bytes: &[u8]) -> Result<EncryptedValue> {
         if bytes.is_empty() {
-            return Err(internal::InternalError::UnexpectedError(
-                "Empty bytes for EncryptedValue deserialization".to_string()
-            ).into());
+            return Err(RecryptErr::InputWrongSize("EncryptedValue", 577));
         }
 
         let mut offset = 0;
@@ -394,12 +392,10 @@ impl EncryptedValue {
 
         match discriminant {
             0 => {
-                // EncryptedOnce variant
+                // EncryptedOnce variant (total 577 bytes)
                 // Deserialize PublicKey (64 bytes)
                 if bytes.len() < offset + 64 {
-                    return Err(internal::InternalError::UnexpectedError(
-                        "Insufficient bytes for PublicKey".to_string()
-                    ).into());
+                    return Err(RecryptErr::InputWrongSize("PublicKey", 64));
                 }
                 let x = &bytes[offset..offset + 32];
                 let y = &bytes[offset + 32..offset + 64];
@@ -408,9 +404,7 @@ impl EncryptedValue {
 
                 // Deserialize EncryptedMessage (384 bytes for Fp12Elem)
                 if bytes.len() < offset + 384 {
-                    return Err(internal::InternalError::UnexpectedError(
-                        "Insufficient bytes for EncryptedMessage".to_string()
-                    ).into());
+                    return Err(RecryptErr::InputWrongSize("EncryptedMessage", 384));
                 }
                 let mut msg_bytes = [0u8; 384];
                 msg_bytes.copy_from_slice(&bytes[offset..offset + 384]);
@@ -419,9 +413,7 @@ impl EncryptedValue {
 
                 // Deserialize AuthHash (32 bytes)
                 if bytes.len() < offset + 32 {
-                    return Err(internal::InternalError::UnexpectedError(
-                        "Insufficient bytes for AuthHash".to_string()
-                    ).into());
+                    return Err(RecryptErr::InputWrongSize("AuthHash", 32));
                 }
                 let mut auth_bytes = [0u8; 32];
                 auth_bytes.copy_from_slice(&bytes[offset..offset + 32]);
@@ -430,9 +422,7 @@ impl EncryptedValue {
 
                 // Deserialize PublicSigningKey (32 bytes)
                 if bytes.len() < offset + 32 {
-                    return Err(internal::InternalError::UnexpectedError(
-                        "Insufficient bytes for PublicSigningKey".to_string()
-                    ).into());
+                    return Err(RecryptErr::InputWrongSize("PublicSigningKey", 32));
                 }
                 let mut pub_signing_bytes = [0u8; 32];
                 pub_signing_bytes.copy_from_slice(&bytes[offset..offset + 32]);
@@ -441,9 +431,7 @@ impl EncryptedValue {
 
                 // Deserialize Ed25519Signature (64 bytes)
                 if bytes.len() < offset + 64 {
-                    return Err(internal::InternalError::UnexpectedError(
-                        "Insufficient bytes for Ed25519Signature".to_string()
-                    ).into());
+                    return Err(RecryptErr::InputWrongSize("Ed25519Signature", 64));
                 }
                 let mut sig_bytes = [0u8; 64];
                 sig_bytes.copy_from_slice(&bytes[offset..offset + 64]);
@@ -459,13 +447,9 @@ impl EncryptedValue {
             }
             1 => {
                 // Transformed variant not implemented yet
-                Err(internal::InternalError::UnexpectedError(
-                    "TransformedValue deserialization not yet implemented".to_string()
-                ).into())
+                Err(RecryptErr::InputWrongSize("TransformedValue", 0))
             }
-            _ => Err(internal::InternalError::UnexpectedError(
-                "Invalid EncryptedValue discriminant".to_string()
-            ).into())
+            _ => Err(RecryptErr::InputWrongSize("EncryptedValue discriminant", 1))
         }
     }
 
