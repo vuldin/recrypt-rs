@@ -796,6 +796,74 @@ impl TransformKey {
             ..self._internal_key
         })
     }
+
+    /// Deserialize TransformKey from bytes (as produced by Hashable::to_bytes)
+    ///
+    /// Byte layout (736 bytes total):
+    /// - ephemeral_public_key: PublicKey (64 bytes = 32 + 32)
+    /// - to_public_key: PublicKey (64 bytes = 32 + 32)
+    /// - encrypted_temp_key: EncryptedTempKey (384 bytes)
+    /// - hashed_temp_key: HashedValue (128 bytes)
+    /// - public_signing_key: PublicSigningKey (32 bytes)
+    /// - signature: Ed25519Signature (64 bytes)
+    pub fn from_bytes(bytes: &[u8]) -> Result<TransformKey> {
+        const PUBLIC_KEY_SIZE: usize = 64; // 32 + 32 for x and y coordinates
+        const ENCRYPTED_TEMP_KEY_SIZE: usize = 384; // Fp12Elem<Monty256>::ENCODED_SIZE_BYTES
+        const HASHED_TEMP_KEY_SIZE: usize = 128; // TwistedHPoint<Monty256>::ENCODED_SIZE_BYTES
+        const PUBLIC_SIGNING_KEY_SIZE: usize = 32;
+        const SIGNATURE_SIZE: usize = 64;
+        const TOTAL_SIZE: usize = PUBLIC_KEY_SIZE + PUBLIC_KEY_SIZE + ENCRYPTED_TEMP_KEY_SIZE + HASHED_TEMP_KEY_SIZE + PUBLIC_SIGNING_KEY_SIZE + SIGNATURE_SIZE;
+
+        if bytes.len() != TOTAL_SIZE {
+            return Err(RecryptErr::InputWrongSize(
+                "TransformKey",
+                TOTAL_SIZE,
+            ));
+        }
+
+        let mut offset = 0;
+
+        // 1. ephemeral_public_key (64 bytes) - split into x and y
+        let ephemeral_x = &bytes[offset..offset + 32];
+        let ephemeral_y = &bytes[offset + 32..offset + PUBLIC_KEY_SIZE];
+        let ephemeral_public_key = PublicKey::new_from_slice((ephemeral_x, ephemeral_y))?;
+        offset += PUBLIC_KEY_SIZE;
+
+        // 2. to_public_key (64 bytes) - split into x and y
+        let to_x = &bytes[offset..offset + 32];
+        let to_y = &bytes[offset + 32..offset + PUBLIC_KEY_SIZE];
+        let to_public_key = PublicKey::new_from_slice((to_x, to_y))?;
+        offset += PUBLIC_KEY_SIZE;
+
+        // 3. encrypted_temp_key (384 bytes)
+        let encrypted_temp_key = EncryptedTempKey::new_from_slice(&bytes[offset..offset + ENCRYPTED_TEMP_KEY_SIZE])?;
+        offset += ENCRYPTED_TEMP_KEY_SIZE;
+
+        // 4. hashed_temp_key (128 bytes)
+        let hashed_temp_key = HashedValue::new_from_slice(&bytes[offset..offset + HASHED_TEMP_KEY_SIZE])?;
+        offset += HASHED_TEMP_KEY_SIZE;
+
+        // 5. public_signing_key (32 bytes)
+        let mut pub_signing_bytes = [0u8; 32];
+        pub_signing_bytes.copy_from_slice(&bytes[offset..offset + PUBLIC_SIGNING_KEY_SIZE]);
+        let public_signing_key = internal::PublicSigningKey::new(pub_signing_bytes);
+        offset += PUBLIC_SIGNING_KEY_SIZE;
+
+        // 6. signature (64 bytes)
+        let mut sig_bytes = [0u8; 64];
+        sig_bytes.copy_from_slice(&bytes[offset..offset + SIGNATURE_SIZE]);
+        let signature = internal::Ed25519Signature::new(sig_bytes);
+
+        // Construct TransformKey using the public constructor
+        Ok(TransformKey::new(
+            ephemeral_public_key,
+            to_public_key,
+            encrypted_temp_key,
+            hashed_temp_key,
+            public_signing_key,
+            signature,
+        ))
+    }
 }
 
 pub trait SchnorrOps {
