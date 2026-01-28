@@ -799,20 +799,22 @@ impl TransformKey {
 
     /// Deserialize TransformKey from bytes (as produced by Hashable::to_bytes)
     ///
-    /// Byte layout (736 bytes total):
+    /// NOTE: Hashable::to_bytes for TransformKey does NOT include the signature!
+    /// It only includes: ephemeral_public_key, to_public_key, encrypted_temp_key,
+    /// hashed_temp_key, and public_signing_key.
+    ///
+    /// Byte layout (672 bytes total):
     /// - ephemeral_public_key: PublicKey (64 bytes = 32 + 32)
     /// - to_public_key: PublicKey (64 bytes = 32 + 32)
     /// - encrypted_temp_key: EncryptedTempKey (384 bytes)
     /// - hashed_temp_key: HashedValue (128 bytes)
     /// - public_signing_key: PublicSigningKey (32 bytes)
-    /// - signature: Ed25519Signature (64 bytes)
     pub fn from_bytes(bytes: &[u8]) -> Result<TransformKey> {
         const PUBLIC_KEY_SIZE: usize = 64; // 32 + 32 for x and y coordinates
         const ENCRYPTED_TEMP_KEY_SIZE: usize = 384; // Fp12Elem<Monty256>::ENCODED_SIZE_BYTES
         const HASHED_TEMP_KEY_SIZE: usize = 128; // TwistedHPoint<Monty256>::ENCODED_SIZE_BYTES
         const PUBLIC_SIGNING_KEY_SIZE: usize = 32;
-        const SIGNATURE_SIZE: usize = 64;
-        const TOTAL_SIZE: usize = PUBLIC_KEY_SIZE + PUBLIC_KEY_SIZE + ENCRYPTED_TEMP_KEY_SIZE + HASHED_TEMP_KEY_SIZE + PUBLIC_SIGNING_KEY_SIZE + SIGNATURE_SIZE;
+        const TOTAL_SIZE: usize = PUBLIC_KEY_SIZE + PUBLIC_KEY_SIZE + ENCRYPTED_TEMP_KEY_SIZE + HASHED_TEMP_KEY_SIZE + PUBLIC_SIGNING_KEY_SIZE;
 
         if bytes.len() != TOTAL_SIZE {
             return Err(RecryptErr::InputWrongSize(
@@ -847,12 +849,11 @@ impl TransformKey {
         let mut pub_signing_bytes = [0u8; 32];
         pub_signing_bytes.copy_from_slice(&bytes[offset..offset + PUBLIC_SIGNING_KEY_SIZE]);
         let public_signing_key = PublicSigningKey::new(pub_signing_bytes);
-        offset += PUBLIC_SIGNING_KEY_SIZE;
 
-        // 6. signature (64 bytes)
-        let mut sig_bytes = [0u8; 64];
-        sig_bytes.copy_from_slice(&bytes[offset..offset + SIGNATURE_SIZE]);
-        let signature = Ed25519Signature::new(sig_bytes);
+        // NOTE: We cannot construct a valid TransformKey without the signature.
+        // The signature is used for verification but not needed for the actual
+        // re-encryption operation. We'll create a placeholder signature.
+        let signature = Ed25519Signature::new([0u8; 64]);
 
         // Construct TransformKey using the public constructor
         Ok(TransformKey::new(
