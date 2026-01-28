@@ -846,13 +846,13 @@ impl TransformKey {
         // 5. public_signing_key (32 bytes)
         let mut pub_signing_bytes = [0u8; 32];
         pub_signing_bytes.copy_from_slice(&bytes[offset..offset + PUBLIC_SIGNING_KEY_SIZE]);
-        let public_signing_key = internal::PublicSigningKey::new(pub_signing_bytes);
+        let public_signing_key = PublicSigningKey::new(pub_signing_bytes);
         offset += PUBLIC_SIGNING_KEY_SIZE;
 
         // 6. signature (64 bytes)
         let mut sig_bytes = [0u8; 64];
         sig_bytes.copy_from_slice(&bytes[offset..offset + SIGNATURE_SIZE]);
-        let signature = internal::Ed25519Signature::new(sig_bytes);
+        let signature = Ed25519Signature::new(sig_bytes);
 
         // Construct TransformKey using the public constructor
         Ok(TransformKey::new(
